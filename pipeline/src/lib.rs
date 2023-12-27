@@ -2,6 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::Punct;
+use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, Ident, LitInt, LitStr};
 
@@ -62,6 +63,39 @@ impl Parse for PipelineAttributes {
 
 #[proc_macro_attribute]
 pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
-    let _attr = parse_macro_input!(attr_args as PipelineAttributes);
-    item
+    let attr = parse_macro_input!(attr_args as PipelineAttributes);
+    let func = parse_macro_input!(item as proc_macro2::TokenStream);
+
+    let name: Ident = Ident::new(&attr.name.value(), proc_macro2::Span::call_site());
+    let retries: LitInt = attr.retries;
+    let retry_delay_secs: LitInt = attr.retry_delay_secs;
+    let cron = attr.cron.value();
+
+    let generated_pipeline_code = quote!(
+
+        pub struct #name {
+            retries: u32,
+            retry_delay_secs: u32,
+            cron: String,
+        }
+
+        impl #name {
+            fn new() -> Self {
+                #name {
+                    retries: #retries,
+                    retry_delay_secs: #retry_delay_secs,
+                    cron: #cron.to_string()
+                }
+            }
+        }
+    );
+
+    let generated_tokens = quote!(
+        #generated_pipeline_code
+
+        #func
+    );
+
+    let generated_tokens = generated_tokens.into();
+    generated_tokens
 }
