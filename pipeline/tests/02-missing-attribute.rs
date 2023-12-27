@@ -1,6 +1,6 @@
-// This test looks for an attribute-like macro with the name "pipeline" to exist.
-// This test will only ensure you can annotate a function with this macro and if
-// it is syntactily correct
+// This test should verify the pipeline macro will fail
+// if any of the attributes name, retries, retry_delay_secs, cron
+// wasn't provided
 use pipeline::pipeline;
 
 #[pipeline(retries => 3, retry_delay_secs => 120, cron => "*/5 * * * *")]
