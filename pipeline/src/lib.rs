@@ -80,7 +80,7 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
             cron: String,
         }
 
-        impl schema::Pipeline for #name {
+        impl schema::Pipeline<Vec<String>> for #name {
             fn new() -> Self {
                 #name {
                     retries: #retries,
@@ -88,6 +88,16 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
                     cron: #cron.to_string()
                 }
             }
+
+            fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<Vec<String>> {
+                if let Some((ranking_url, day, unused_var)) = args.downcast_ref::<(String, String, u32)>() {
+                    let results: Vec<String> = vec![ranking_url.to_string(), day.to_string()];
+                    return Into::into(Ok(results));
+                } else {
+                    panic!("Unsupported arguments");
+                }
+            }
+
         }
     );
 
