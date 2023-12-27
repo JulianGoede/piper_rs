@@ -89,6 +89,16 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
     let cron = attr.cron.value();
 
 
+
+    let pipeline_schema = match &func.sig.output {
+        syn::ReturnType::Default => {
+            quote!(schema::Pipeline<Vec<String>>)
+        }
+        syn::ReturnType::Type(_, ty) => {
+            quote!(schema::Pipeline<#ty>)
+        }
+    };
+
     let run_signature = match &func.sig.output {
         syn::ReturnType::Default => {
             quote!(fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<()>)
@@ -109,7 +119,7 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
             cron: String,
         }
 
-        impl schema::Pipeline<Vec<String>> for #name {
+        impl #pipeline_schema for #name {
             fn new() -> Self {
                 #name {
                     retries: #retries,
