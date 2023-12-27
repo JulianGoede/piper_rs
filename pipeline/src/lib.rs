@@ -72,6 +72,7 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
     let cron = attr.cron.value();
 
     let generated_pipeline_code = quote!(
+        use schema::Pipeline;
 
         pub struct #name {
             retries: u32,
@@ -79,7 +80,7 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
             cron: String,
         }
 
-        impl #name {
+        impl schema::Pipeline for #name {
             fn new() -> Self {
                 #name {
                     retries: #retries,

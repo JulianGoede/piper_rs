@@ -1,0 +1,9 @@
+[package]
+name = "schema"
+version = "0.0.0"
+autotests = false
+edition = "2021"
+publish = false
+
+[lib]
+doctest = false

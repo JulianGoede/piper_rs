@@ -10,4 +10,5 @@ name = "wip"
 path = "main.rs"
 
 [dependencies]
+schema = {path="schema"}
 pipeline = {path="pipeline"}
