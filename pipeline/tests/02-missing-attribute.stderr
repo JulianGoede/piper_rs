@@ -1,0 +1,5 @@
+error: Expected attribute `name` but got `retries`
+ --> tests/02-missing-attribute.rs:6:12
+  |
+6 | #[pipeline(retries => 3, retry_delay_secs => 120, cron => "*/5 * * * *")]
+  |            ^^^^^^^

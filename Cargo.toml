@@ -1,0 +1,13 @@
+[package]
+name = "pipe_rs"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[[bin]]
+name = "wip"
+path = "main.rs"
+
+[dependencies]
+pipeline = {path="pipeline"}
