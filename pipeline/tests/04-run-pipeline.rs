@@ -1,4 +1,4 @@
-// This test looks for a run metho// This test looks for a run method
+// This test looks for a run method
 // that should return schema::Succcess
 // with the appropriate return values
 use pipeline::pipeline;

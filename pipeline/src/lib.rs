@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Punct;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{parse_macro_input, Ident, LitInt, LitStr};
+use syn::{parse_macro_input, Ident, LitInt, LitStr, ItemFn};
 
 #[allow(dead_code)]
 struct PipelineAttributes {
@@ -47,7 +47,6 @@ fn parse_attribute<T: Parse>(input: ParseStream, key_name: String) -> syn::Resul
 
 impl Parse for PipelineAttributes {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        // eprintln!("{:?}", input);
         let name = parse_attribute(input, "name".to_string())?;
         let retries = parse_attribute(input, "retries".to_string())?;
         let retry_delay_secs = parse_attribute(input, "retry_delay_secs".to_string())?;
@@ -61,18 +60,48 @@ impl Parse for PipelineAttributes {
     }
 }
 
+fn get_typed_fn_args<'a>(sig: &'a syn::Signature) -> (Vec<&'a proc_macro2::Ident>, Vec<&'a syn::Type>){
+    sig.inputs.iter().map(|arg| {
+        match arg {
+            syn::FnArg::Typed(typed_arg) => {
+                if let syn::Pat::Ident(ident) = typed_arg.pat.as_ref() {
+                    return (&ident.ident, typed_arg.ty.as_ref());
+                } else {
+                    panic!("Only named arguments are supported for pipeline");
+                }
+            },
+            syn::FnArg::Receiver(_) => panic!("functions with self args are not supported for pipeline"),
+        }
+    }).unzip()
+}
+
 #[proc_macro_attribute]
 pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
     let attr = parse_macro_input!(attr_args as PipelineAttributes);
-    let func = parse_macro_input!(item as proc_macro2::TokenStream);
+    let func = parse_macro_input!(item as ItemFn);
+
+    let fn_name = &func.sig.ident;
+    let (arg_names, arg_types): (Vec<&proc_macro2::Ident>, Vec<&syn::Type>) = get_typed_fn_args(&func.sig);
 
     let name: Ident = Ident::new(&attr.name.value(), proc_macro2::Span::call_site());
     let retries: LitInt = attr.retries;
     let retry_delay_secs: LitInt = attr.retry_delay_secs;
     let cron = attr.cron.value();
 
+
+    let run_signature = match &func.sig.output {
+        syn::ReturnType::Default => {
+            quote!(fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<()>)
+        }
+        syn::ReturnType::Type(_, ty) => {
+            quote!(fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<#ty>)
+        }
+    };
+
     let generated_pipeline_code = quote!(
         use schema::Pipeline;
+
+        #func
 
         pub struct #name {
             retries: u32,
@@ -89,9 +118,9 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
 
-            fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<Vec<String>> {
-                if let Some((ranking_url, day, unused_var)) = args.downcast_ref::<(String, String, u32)>() {
-                    let results: Vec<String> = vec![ranking_url.to_string(), day.to_string()];
+            #run_signature {
+                if let Some((#(#arg_names),*)) = args.downcast_ref::<(#(#arg_types),*)>() {
+                    let results = #fn_name(#(#arg_names.to_owned()),*);
                     return Into::into(Ok(results));
                 } else {
                     panic!("Unsupported arguments");
@@ -101,12 +130,6 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
         }
     );
 
-    let generated_tokens = quote!(
-        #generated_pipeline_code
-
-        #func
-    );
-
-    let generated_tokens = generated_tokens.into();
+    let generated_tokens = generated_pipeline_code.into();
     generated_tokens
 }
