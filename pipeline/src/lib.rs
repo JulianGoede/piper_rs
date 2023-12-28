@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Punct;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{parse_macro_input, Ident, LitInt, LitStr, ItemFn};
+use syn::{parse_macro_input, Ident, ItemFn, LitInt, LitStr};
 
 #[allow(dead_code)]
 struct PipelineAttributes {
@@ -60,19 +60,35 @@ impl Parse for PipelineAttributes {
     }
 }
 
-fn get_typed_fn_args<'a>(sig: &'a syn::Signature) -> (Vec<&'a proc_macro2::Ident>, Vec<&'a syn::Type>){
-    sig.inputs.iter().map(|arg| {
-        match arg {
+fn get_typed_fn_args<'a>(
+    sig: &'a syn::Signature,
+) -> (Vec<&'a proc_macro2::Ident>, Vec<&'a syn::Type>) {
+    sig.inputs
+        .iter()
+        .map(|arg| match arg {
             syn::FnArg::Typed(typed_arg) => {
                 if let syn::Pat::Ident(ident) = typed_arg.pat.as_ref() {
                     return (&ident.ident, typed_arg.ty.as_ref());
                 } else {
                     panic!("Only named arguments are supported for pipeline");
                 }
-            },
-            syn::FnArg::Receiver(_) => panic!("functions with self args are not supported for pipeline"),
+            }
+            syn::FnArg::Receiver(_) => {
+                panic!("functions with self args are not supported for pipeline")
+            }
+        })
+        .unzip()
+}
+
+fn infer_return_type(fn_return_type: &syn::ReturnType) -> proc_macro2::TokenStream {
+    match fn_return_type {
+        syn::ReturnType::Default => {
+            quote!(())
         }
-    }).unzip()
+        syn::ReturnType::Type(_, ty) => {
+            quote!(#ty)
+        }
+    }
 }
 
 #[proc_macro_attribute]
@@ -81,32 +97,17 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
     let func = parse_macro_input!(item as ItemFn);
 
     let fn_name = &func.sig.ident;
-    let (arg_names, arg_types): (Vec<&proc_macro2::Ident>, Vec<&syn::Type>) = get_typed_fn_args(&func.sig);
+    let (arg_names, arg_types): (Vec<&proc_macro2::Ident>, Vec<&syn::Type>) =
+        get_typed_fn_args(&func.sig);
 
     let name: Ident = Ident::new(&attr.name.value(), proc_macro2::Span::call_site());
     let retries: LitInt = attr.retries;
     let retry_delay_secs: LitInt = attr.retry_delay_secs;
     let cron = attr.cron.value();
 
-
-
-    let pipeline_schema = match &func.sig.output {
-        syn::ReturnType::Default => {
-            quote!(schema::Pipeline<Vec<String>>)
-        }
-        syn::ReturnType::Type(_, ty) => {
-            quote!(schema::Pipeline<#ty>)
-        }
-    };
-
-    let run_signature = match &func.sig.output {
-        syn::ReturnType::Default => {
-            quote!(fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<()>)
-        }
-        syn::ReturnType::Type(_, ty) => {
-            quote!(fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<#ty>)
-        }
-    };
+    let ty = infer_return_type(&func.sig.output);
+    let pipeline_schema = quote!(schema::Pipeline<#ty>);
+    let run_signature = quote!(fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<#ty>);
 
     let generated_pipeline_code = quote!(
         use schema::Pipeline;
