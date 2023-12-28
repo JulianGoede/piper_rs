@@ -5,4 +5,5 @@ fn tests() {
     t.compile_fail("tests/02-missing-attribute.rs");
     t.pass("tests/03-generate-pipeline.rs");
     t.pass("tests/04-run-pipeline.rs");
+    t.pass("tests/05-adapt-result-type.rs");
 }

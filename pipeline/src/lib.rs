@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Punct;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{parse_macro_input, Ident, ItemFn, LitInt, LitStr};
+use syn::{parse_macro_input, Ident, ItemFn, LitInt, LitStr, Path, PathArguments, Type, TypePath, GenericArgument};
 
 #[allow(dead_code)]
 struct PipelineAttributes {
@@ -80,13 +80,44 @@ fn get_typed_fn_args<'a>(
         .unzip()
 }
 
-fn infer_return_type(fn_return_type: &syn::ReturnType) -> proc_macro2::TokenStream {
+// returns (T, None) for a function foo(..) -> T
+// and (T, E) for a function foo(..) -> Result<T, E>
+fn infer_return_type(fn_return_type: &syn::ReturnType) -> (proc_macro2::TokenStream, Option<proc_macro2::TokenStream>) {
     match fn_return_type {
         syn::ReturnType::Default => {
-            quote!(())
+            (quote!(()), None)
         }
         syn::ReturnType::Type(_, ty) => {
-            quote!(#ty)
+            if let Type::Path(TypePath {
+                path: Path { segments, .. },
+                ..
+            }) = ty.as_ref()
+            {
+                if let Some(segment) = segments.last() {
+                    if segment.ident == "Result" {
+                        if let PathArguments::AngleBracketed(result_args) = &segment.arguments {
+                            let result_types: Vec<proc_macro2::TokenStream> = result_args.args.iter().filter_map(|arg|{
+                                if let GenericArgument::Type(result_type) = arg {
+                                    Some(quote!(#result_type))
+                                } else {
+                                    None
+                                }
+
+                            }).collect();
+
+                            return match result_types.as_slice() {
+                                [t, e, ..] => (quote!(#t), Some(quote!(#e))),
+                                [t, ] => (quote!(#t), None),
+                                [] => (quote!(#ty), None),
+                            }
+                        }
+
+                        return (quote!(#ty), None);
+                    }
+                }
+                return (quote!(#ty), None);
+            }
+            (quote!(#ty), None)
         }
     }
 }
@@ -105,12 +136,14 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
     let retry_delay_secs: LitInt = attr.retry_delay_secs;
     let cron = attr.cron.value();
 
-    let ty = infer_return_type(&func.sig.output);
+    let (success_type, maybe_error_type) = infer_return_type(&func.sig.output);
+    let ty = if let Some(error_type) = maybe_error_type {quote!(#success_type, #error_type)} else {quote!(#success_type)};
     let pipeline_schema = quote!(schema::Pipeline<#ty>);
     let run_signature = quote!(fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<#ty>);
 
     let generated_pipeline_code = quote!(
         use schema::Pipeline;
+        use schema::RunResult;
 
         #func
 
@@ -132,7 +165,7 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
             #run_signature {
                 if let Some((#(#arg_names),*)) = args.downcast_ref::<(#(#arg_types),*)>() {
                     let results = #fn_name(#(#arg_names.to_owned()),*);
-                    return Into::into(Ok(results));
+                    return RunResult::from(results);
                 } else {
                     panic!("Unsupported arguments");
                 }

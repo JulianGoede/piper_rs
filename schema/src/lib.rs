@@ -1,11 +1,7 @@
-// TODO: turn this into a proper error including
-// implementing std::error::Error
-// and std::convert::from
-// and std::fmt::Display
-#[derive(Debug)]
-pub struct DefaultError {}
+use std::error::Error;
 
-pub enum RunResult<T, E = DefaultError> {
+#[derive(Debug)]
+pub enum RunResult<T, E = Box<dyn Error>> {
     Ok(T),
     Retry(E),
     Err(E),
@@ -20,9 +16,19 @@ impl<T, E> From<Result<T, E>> for RunResult<T, E> {
     }
 }
 
-impl<T> From<T> for RunResult<T> {
+impl<T, E> Into<Result<T, E>> for RunResult<T, E> {
+    fn into(self) -> Result<T, E> {
+        match self {
+            RunResult::Ok(t) => Result::Ok(t),
+            RunResult::Retry(e) => Result::Err(e),
+            RunResult::Err(e) => Result::Err(e),
+        }
+    }
+}
+
+impl<T, E> From<T> for RunResult<T, E> {
     fn from(value: T) -> Self {
-        return RunResult::Ok(value);
+        RunResult::Ok(value)
     }
 }
 
@@ -44,9 +50,17 @@ impl<T, E> RunResult<T, E> {
             RunResult::Err(_) => panic!("Cannot unwrap from an Err"),
         }
     }
+
+    pub fn unwrap_err(self) -> E {
+        match self {
+            RunResult::Ok(_) => panic!("Expected an Err but was Ok"),
+            RunResult::Retry(e) => e,
+            RunResult::Err(e) => e,
+        }
+    }
 }
 
-pub trait Pipeline<T, E = DefaultError> {
+pub trait Pipeline<T, E = Box<dyn Error>> {
     fn new() -> Self;
 
     fn run(&self, args: &dyn std::any::Any) -> RunResult<T, E>;
