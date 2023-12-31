@@ -2,12 +2,13 @@
 // which return type is a `Result<T, E>` then also
 // then the generate pipeline.run should return a RunResult<T, E>
 // instead of a RunResult<Result<T, E>>
+
 use pipeline::pipeline;
+use std::{fmt::Display, error::Error};
+use schema::{Pipeline, RunResult};
 
-use std::fmt::Display;
-
-#[derive(Debug, Clone)]
-struct CustomError;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomError;
 
 impl Display for CustomError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -15,9 +16,18 @@ impl Display for CustomError {
     }
 }
 
+impl Error for CustomError {}
+
 #[pipeline(name => "Foo", retries => 0, retry_delay_secs => 1, cron => "*/5 * * * *")]
 fn foo(bar: String) -> std::result::Result<String, CustomError> {
     Ok(bar)
+}
+
+pub type Result<T> = std::result::Result<T, CustomError>;
+
+#[pipeline(name => "Bar", retries => 0, retry_delay_secs => 1, cron => "*/5 * * * *")]
+fn bar(_baz: String) -> Result<()> {
+    Err(CustomError)
 }
 
 fn main() {
@@ -25,4 +35,12 @@ fn main() {
     let args: String = "bar".to_string();
     let actual: RunResult<String, CustomError> = pipeline.run(&args);
     assert!(actual.is_ok());
+
+    let pipeline = Bar::new();
+    let args: String = "baz".to_string();
+    let actual: RunResult<(), CustomError> = pipeline.run(&args);
+    assert!(!actual.is_ok());
+    let err: CustomError = actual.unwrap_err();
+    let expected = CustomError{};
+    assert_eq!(err, expected);
 }

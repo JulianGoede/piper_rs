@@ -7,21 +7,21 @@ pub enum RunResult<T, E = Box<dyn Error>> {
     Err(E),
 }
 
-impl<T, E> From<Result<T, E>> for RunResult<T, E> {
-    fn from(value: Result<T, E>) -> Self {
+impl<T, E, U> From<Result<T, U>> for RunResult<T, E> where U: Into<E> {
+    fn from(value: Result<T, U>) -> Self {
         match value {
             Ok(v) => RunResult::Ok(v),
-            Err(e) => RunResult::Retry(e),
+            Err(e) => RunResult::Retry(e.into()),
         }
     }
 }
 
-impl<T, E> Into<Result<T, E>> for RunResult<T, E> {
-    fn into(self) -> Result<T, E> {
+impl<T, E, U> Into<Result<T, U>> for RunResult<T, E> where E: Into<U>{
+    fn into(self) -> Result<T, U> {
         match self {
             RunResult::Ok(t) => Result::Ok(t),
-            RunResult::Retry(e) => Result::Err(e),
-            RunResult::Err(e) => Result::Err(e),
+            RunResult::Retry(e) => Result::Err(e.into()),
+            RunResult::Err(e) => Result::Err(e.into()),
         }
     }
 }

@@ -2,9 +2,12 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::Punct;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::parse::{Parse, ParseStream};
-use syn::{parse_macro_input, Ident, ItemFn, LitInt, LitStr, Path, PathArguments, Type, TypePath, GenericArgument};
+use syn::{
+    parse_macro_input, GenericArgument, Ident, ItemFn, LitInt, LitStr, Path, PathArguments, Type,
+    TypePath,
+};
 
 #[allow(dead_code)]
 struct PipelineAttributes {
@@ -82,11 +85,11 @@ fn get_typed_fn_args<'a>(
 
 // returns (T, None) for a function foo(..) -> T
 // and (T, E) for a function foo(..) -> Result<T, E>
-fn infer_return_type(fn_return_type: &syn::ReturnType) -> (proc_macro2::TokenStream, Option<proc_macro2::TokenStream>) {
+fn infer_return_type(
+    fn_return_type: &syn::ReturnType,
+) -> (proc_macro2::TokenStream, Option<proc_macro2::TokenStream>) {
     match fn_return_type {
-        syn::ReturnType::Default => {
-            (quote!(()), None)
-        }
+        syn::ReturnType::Default => (quote!(()), None),
         syn::ReturnType::Type(_, ty) => {
             if let Type::Path(TypePath {
                 path: Path { segments, .. },
@@ -96,20 +99,23 @@ fn infer_return_type(fn_return_type: &syn::ReturnType) -> (proc_macro2::TokenStr
                 if let Some(segment) = segments.last() {
                     if segment.ident == "Result" {
                         if let PathArguments::AngleBracketed(result_args) = &segment.arguments {
-                            let result_types: Vec<proc_macro2::TokenStream> = result_args.args.iter().filter_map(|arg|{
-                                if let GenericArgument::Type(result_type) = arg {
-                                    Some(quote!(#result_type))
-                                } else {
-                                    None
-                                }
-
-                            }).collect();
+                            let result_types: Vec<proc_macro2::TokenStream> = result_args
+                                .args
+                                .iter()
+                                .filter_map(|arg| {
+                                    if let GenericArgument::Type(result_type) = arg {
+                                        Some(quote!(#result_type))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
 
                             return match result_types.as_slice() {
                                 [t, e, ..] => (quote!(#t), Some(quote!(#e))),
-                                [t, ] => (quote!(#t), None),
+                                [t] => (quote!(#t), None),
                                 [] => (quote!(#ty), None),
-                            }
+                            };
                         }
 
                         return (quote!(#ty), None);
@@ -119,6 +125,45 @@ fn infer_return_type(fn_return_type: &syn::ReturnType) -> (proc_macro2::TokenStr
             }
             (quote!(#ty), None)
         }
+    }
+}
+
+fn extract_hidden_err_type(func: &ItemFn) -> Option<proc_macro2::TokenStream> {
+    let err_type: Option<proc_macro2::TokenStream> = func
+        .block
+        .stmts
+        .iter()
+        .filter(|statement| {
+            if let syn::Stmt::Expr(syn::Expr::Call(expr_call), _) = statement {
+                if let syn::Expr::Path(expr_path) = expr_call.func.as_ref() {
+                    for segment in &expr_path.path.segments {
+                        if segment.ident == "Err" {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        })
+        .map(|statement| {
+            if let syn::Stmt::Expr(syn::Expr::Call(expr_call), _) = statement {
+                let err_type: &syn::Expr = expr_call
+                    .args
+                    .first()
+                    .expect("Err(..) cannot have empty args");
+                let err_type = err_type.to_token_stream();
+                // panic!("{:?}", err_type);
+                err_type
+            } else {
+                panic!("Unreachable")
+            }
+        })
+        .next();
+    if err_type.is_some() {
+        Some(quote!(#err_type))
+    } else {
+        // found no Err(..) statement
+        None
     }
 }
 
@@ -137,14 +182,20 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
     let cron = attr.cron.value();
 
     let (success_type, maybe_error_type) = infer_return_type(&func.sig.output);
-    let ty = if let Some(error_type) = maybe_error_type {quote!(#success_type, #error_type)} else {quote!(#success_type)};
+    let maybe_error_type = if let Some(error_type) = maybe_error_type {
+        Some(quote!(#error_type))
+    } else {
+        extract_hidden_err_type(&func)
+    };
+    let ty = match maybe_error_type {
+        Some(error_type) => quote!(#success_type, #error_type),
+        None => quote!(#success_type),
+    };
+    // let ty = if let Some(error_type) = maybe_error_type {quote!(#success_type, #error_type)} else {quote!(#success_type)};
     let pipeline_schema = quote!(schema::Pipeline<#ty>);
-    let run_signature = quote!(fn run(&self, args: &dyn std::any::Any) -> schema::RunResult<#ty>);
+    let run_signature = quote!(fn run(&self, args: &dyn ::std::any::Any) -> schema::RunResult<#ty>);
 
     let generated_pipeline_code = quote!(
-        use schema::Pipeline;
-        use schema::RunResult;
-
         #func
 
         pub struct #name {
@@ -165,7 +216,7 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
             #run_signature {
                 if let Some((#(#arg_names),*)) = args.downcast_ref::<(#(#arg_types),*)>() {
                     let results = #fn_name(#(#arg_names.to_owned()),*);
-                    return RunResult::from(results);
+                    return schema::RunResult::from(results);
                 } else {
                     panic!("Unsupported arguments");
                 }
