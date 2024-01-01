@@ -3,6 +3,7 @@
 // with the appropriate return values
 use schema;
 use pipeline::pipeline;
+use schema::Pipeline;
 
 #[pipeline(name => "GithubTrends", retries => 3, retry_delay_secs => 120, cron => "*/5 * * * *")]
 fn download_github_trends(ranking_url: String, day: String, _unused_var: u32) -> Vec<String> {
