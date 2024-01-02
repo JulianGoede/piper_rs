@@ -23,24 +23,9 @@ fn foo(bar: String) -> std::result::Result<String, CustomError> {
     Ok(bar)
 }
 
-pub type Result<T> = std::result::Result<T, CustomError>;
-
-#[pipeline(name => "Bar", retries => 0, retry_delay_secs => 1, cron => "*/5 * * * *")]
-fn bar(_baz: String) -> Result<()> {
-    Err(CustomError)
-}
-
 fn main() {
     let pipeline = Foo::new();
     let args: String = "bar".to_string();
     let actual: RunResult<String, CustomError> = pipeline.run(&args);
     assert!(actual.is_ok());
-
-    let pipeline = Bar::new();
-    let args: String = "baz".to_string();
-    let actual: RunResult<(), CustomError> = pipeline.run(&args);
-    assert!(!actual.is_ok());
-    let err: CustomError = actual.unwrap_err();
-    let expected = CustomError{};
-    assert_eq!(err, expected);
 }

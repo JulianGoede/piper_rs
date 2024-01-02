@@ -6,4 +6,7 @@ fn tests() {
     t.pass("tests/03-generate-pipeline.rs");
     t.pass("tests/04-run-pipeline.rs");
     t.pass("tests/05-adapt-result-type.rs");
+
+    // longterm goals
+    // t.pass("tests/??-implicit-error-type.rs");
 }

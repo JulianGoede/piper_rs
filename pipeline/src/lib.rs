@@ -2,7 +2,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::Punct;
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{
     parse_macro_input, GenericArgument, Ident, ItemFn, LitInt, LitStr, Path, PathArguments, Type,
@@ -128,45 +128,6 @@ fn infer_return_type(
     }
 }
 
-fn extract_hidden_err_type(func: &ItemFn) -> Option<proc_macro2::TokenStream> {
-    let err_type: Option<proc_macro2::TokenStream> = func
-        .block
-        .stmts
-        .iter()
-        .filter(|statement| {
-            if let syn::Stmt::Expr(syn::Expr::Call(expr_call), _) = statement {
-                if let syn::Expr::Path(expr_path) = expr_call.func.as_ref() {
-                    for segment in &expr_path.path.segments {
-                        if segment.ident == "Err" {
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
-        })
-        .map(|statement| {
-            if let syn::Stmt::Expr(syn::Expr::Call(expr_call), _) = statement {
-                let err_type: &syn::Expr = expr_call
-                    .args
-                    .first()
-                    .expect("Err(..) cannot have empty args");
-                let err_type = err_type.to_token_stream();
-                // panic!("{:?}", err_type);
-                err_type
-            } else {
-                panic!("Unreachable")
-            }
-        })
-        .next();
-    if err_type.is_some() {
-        Some(quote!(#err_type))
-    } else {
-        // found no Err(..) statement
-        None
-    }
-}
-
 #[proc_macro_attribute]
 pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
     let attr = parse_macro_input!(attr_args as PipelineAttributes);
@@ -182,16 +143,10 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
     let cron = attr.cron.value();
 
     let (success_type, maybe_error_type) = infer_return_type(&func.sig.output);
-    let maybe_error_type = if let Some(error_type) = maybe_error_type {
-        Some(quote!(#error_type))
-    } else {
-        extract_hidden_err_type(&func)
-    };
     let ty = match maybe_error_type {
         Some(error_type) => quote!(#success_type, #error_type),
         None => quote!(#success_type),
     };
-    // let ty = if let Some(error_type) = maybe_error_type {quote!(#success_type, #error_type)} else {quote!(#success_type)};
     let pipeline_schema = quote!(schema::Pipeline<#ty>);
     let run_signature = quote!(fn run(&self, args: &dyn ::std::any::Any) -> schema::RunResult<#ty>);
 
