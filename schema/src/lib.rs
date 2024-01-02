@@ -63,5 +63,5 @@ impl<T, E> RunResult<T, E> {
 pub trait Pipeline<T, E = Box<dyn Error>> {
     fn new() -> Self;
 
-    fn run(&self, args: &dyn std::any::Any) -> RunResult<T, E>;
+    fn run(&mut self, args: &dyn std::any::Any) -> RunResult<T, E>;
 }

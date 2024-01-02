@@ -9,7 +9,7 @@ fn download_github_trends(ranking_url: String, day: String) -> Vec<String> {
 
 
 fn main() {
-    let pipeline = GithubTrends::new();
+    let mut pipeline = GithubTrends::new();
     assert_eq!(pipeline.retries, 3);
     assert_eq!(pipeline.retry_delay_secs, 120);
     assert_eq!(pipeline.cron, "*/5 * * * *".to_string());

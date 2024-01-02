@@ -24,7 +24,7 @@ fn foo(bar: String) -> std::result::Result<String, CustomError> {
 }
 
 fn main() {
-    let pipeline = Foo::new();
+    let mut pipeline = Foo::new();
     let args: String = "bar".to_string();
     let actual: RunResult<String, CustomError> = pipeline.run(&args);
     assert!(actual.is_ok());

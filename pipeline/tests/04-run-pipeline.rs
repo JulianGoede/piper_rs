@@ -15,7 +15,7 @@ fn download_github_trends(ranking_url: String, day: String, _unused_var: u32) ->
 
 
 fn main() {
-    let pipeline = GithubTrends::new();
+    let mut pipeline = GithubTrends::new();
     let args: (String, String, u32) = ("foo".to_string(), "2077-01-01".to_string(), 42);
     let actual: schema::RunResult<Vec<String>> = pipeline.run(&args);
     assert!(actual.is_ok());

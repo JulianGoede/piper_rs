@@ -148,7 +148,7 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
         None => quote!(#success_type),
     };
     let pipeline_schema = quote!(schema::Pipeline<#ty>);
-    let run_signature = quote!(fn run(&self, args: &dyn ::std::any::Any) -> schema::RunResult<#ty>);
+    let run_signature = quote!(fn run(&mut self, args: &dyn ::std::any::Any) -> schema::RunResult<#ty>);
 
     let generated_pipeline_code = quote!(
         #func
@@ -171,7 +171,16 @@ pub fn pipeline(attr_args: TokenStream, item: TokenStream) -> TokenStream {
             #run_signature {
                 if let Some((#(#arg_names),*)) = args.downcast_ref::<(#(#arg_types),*)>() {
                     let results = #fn_name(#(#arg_names.to_owned()),*);
-                    return schema::RunResult::from(results);
+                    match schema::RunResult::from(results) {
+                        schema::RunResult::Ok(t) => return schema::RunResult::Ok(t),
+                        schema::RunResult::Retry(e) | schema::RunResult::Err(e) => {
+                            if self.retries > 0 {
+                                self.retries = self.retries -1;
+                                return schema::RunResult::Retry(e);
+                            }
+                            return schema::RunResult::Err(e);
+                        }
+                    }
                 } else {
                     panic!("Unsupported arguments");
                 }
