@@ -1,34 +1,16 @@
 use schema::{Pipeline, Scheduler};
-// use std::any::Any;
-use std::marker::PhantomData;
+use std::any::Any;
 
-pub struct Coordinator<P, S>
-where
-    P: Pipeline<S>,
-{
-    phantom: PhantomData<S>,
-    pipelines: Vec<P>,
+pub struct Coordinator {
+    pipelines: Vec<Box<dyn Any>>,
 }
 
-impl<P, S> Scheduler<P, S> for Coordinator<P, S>
-where
-    P: Pipeline<S>,
-{
+impl Scheduler for Coordinator {
     fn new() -> Self {
-        Coordinator { phantom: PhantomData, pipelines: vec![] }
+        Coordinator { pipelines: vec![] }
     }
 
-    fn register(&mut self, pipeline: P) where P: Pipeline<S> {
-        self.pipelines.push(pipeline);
+    fn register<T: 'static, E: 'static>(&mut self, pipeline: impl Pipeline<T, E> + 'static) {
+        self.pipelines.push(Box::new(pipeline) as Box<dyn Any>);
     }
-    // fn new() -> Self {
-    //     Coordinator { pipelines: vec![] }
-    // }
-    //
-    // fn register(&mut self, pipeline: P)
-    // where
-    //     P: Pipeline<&'static dyn std::any::Any>,
-    // {
-    //     self.pipelines.push(pipeline);
-    // }
 }

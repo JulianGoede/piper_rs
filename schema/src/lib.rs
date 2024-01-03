@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::any::Any;
 
 #[derive(Debug)]
 pub enum RunResult<T, E = Box<dyn Error>> {
@@ -61,15 +62,14 @@ impl<T, E> RunResult<T, E> {
 }
 
 pub trait Pipeline<T, E = Box<dyn Error>> {
-    fn new() -> Self;
+    fn new() -> Self where Self: Sized;
 
     fn run(&mut self, args: &dyn std::any::Any) -> RunResult<T, E>;
 }
 
 
-pub trait Scheduler<P, S> where P: Pipeline<S>{
+pub trait Scheduler {
     fn new() -> Self;
 
-    // fn register(&mut self, pipeline: P) where P: Pipeline<&'static dyn std::any::Any>;
-    fn register(&mut self, pipeline: P) where P: Pipeline<S>;
+    fn register<T: Any, E: Any>(&mut self, pipeline: impl Pipeline<T, E> + 'static);
 }
