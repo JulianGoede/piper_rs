@@ -65,3 +65,11 @@ pub trait Pipeline<T, E = Box<dyn Error>> {
 
     fn run(&mut self, args: &dyn std::any::Any) -> RunResult<T, E>;
 }
+
+
+pub trait Scheduler<P, S> where P: Pipeline<S>{
+    fn new() -> Self;
+
+    // fn register(&mut self, pipeline: P) where P: Pipeline<&'static dyn std::any::Any>;
+    fn register(&mut self, pipeline: P) where P: Pipeline<S>;
+}

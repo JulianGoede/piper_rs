@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
+members = ["schema", "pipeline", "coordinator"]
 
 [[bin]]
 name = "wip"
 path = "main.rs"
 
 [dependencies]
-schema = {path="schema"}
-pipeline = {path="pipeline"}
+schema      = {path = "schema"}
+pipeline    = {path = "pipeline"}
+coordinator = {path = "coordinator"}
