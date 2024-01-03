@@ -1,0 +1,16 @@
+[package]
+name = "examples"
+version = "0.0.1"
+autotests = false
+edition = "2021"
+publish = false
+rust-version="1.75"
+
+[[bin]]
+name = "dev"
+path = "src/dev.rs"
+
+[dependencies]
+schema      = {path = "../crates/schema" }
+pipeline    = {path = "../crates/pipeline" }
+coordinator = {path = "../crates/coordinator" }
