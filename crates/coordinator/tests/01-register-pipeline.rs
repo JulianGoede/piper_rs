@@ -19,6 +19,6 @@ impl Pipeline<()> for DummyPipeline {
 
 fn main() {
     let pipeline: DummyPipeline = DummyPipeline::new();
-    let mut coordinator: Coordinator<DummyPipeline, ()> = Coordinator::new();
+    let mut coordinator = Coordinator::new();
     coordinator.register(pipeline);
 }

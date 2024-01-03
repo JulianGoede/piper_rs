@@ -3,6 +3,7 @@ name = "schema"
 version = "0.0.0"
 autotests = false
 edition = "2021"
+rust-version="1.75"
 publish = false
 
 [lib]
